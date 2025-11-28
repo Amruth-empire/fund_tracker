@@ -11,6 +11,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import UploadInvoice from "./pages/UploadInvoice";
 import FraudDetection from "./pages/FraudDetection";
 import Projects from "./pages/Projects";
+import Analytics from "./pages/Analytics";
 import ContractorPortal from "./pages/ContractorPortal";
 import CitizenPortal from "./pages/CitizenPortal";
 import NotFound from "./pages/NotFound";
@@ -59,6 +60,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Projects />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/analytics"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <Analytics />
                 </ProtectedRoute>
               }
             />

@@ -19,7 +19,7 @@ const adminLinks = [
 
 const Sidebar = () => {
   return (
-    <aside className="h-screen w-64 border-r bg-sidebar">
+    <aside className="sticky top-0 h-screen w-64 border-r bg-sidebar">
       <div className="flex h-full flex-col">
         <div className="border-b border-sidebar-border px-6 py-5">
           <div className="flex items-center gap-2">
