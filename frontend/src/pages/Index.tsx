@@ -150,23 +150,6 @@ const Index = () => {
               Ensuring transparency and accountability in rural development through
               intelligent automation, real-time monitoring, and AI-powered fraud detection
             </p>
-            <div className="flex flex-wrap justify-center gap-4">
-              <Button asChild size="lg" className="shadow-primary">
-                <Link to="/login">
-                  <Shield className="mr-2 h-5 w-5" />
-                  Login as Admin
-                </Link>
-              </Button>
-              <Button asChild size="lg" variant="outline">
-                <Link to="/login">Login as Contractor</Link>
-              </Button>
-              <Button asChild size="lg" variant="secondary">
-                <Link to="/citizen">
-                  <Users className="mr-2 h-5 w-5" />
-                  Open Citizen Portal
-                </Link>
-              </Button>
-            </div>
           </div>
         </div>
       </section>
