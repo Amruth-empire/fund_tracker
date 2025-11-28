@@ -10,7 +10,7 @@ from app.utils.helpers import get_current_user
 router = APIRouter()
 
 
-@router.post("/", response_model=InvoiceOut)
+@router.post("/")
 async def upload_invoice(
     project_id: int,
     invoice_number: str,
@@ -20,6 +20,10 @@ async def upload_invoice(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
+    """
+    Upload invoice with OCR verification.
+    Returns invoice data along with verification results and AI risk assessment.
+    """
     payload = InvoiceCreate(
         project_id=project_id,
         invoice_number=invoice_number,
@@ -27,8 +31,8 @@ async def upload_invoice(
         amount=amount,
     )
 
-    invoice = create_invoice(db, file, payload)
-    return invoice
+    result = create_invoice(db, file, payload)
+    return result
 
 
 @router.get("/", response_model=List[InvoiceOut])

@@ -7,58 +7,122 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Brain, CheckCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Brain, CheckCircle, AlertTriangle, X, Check, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+interface VerificationResult {
+  invoice_number_match: boolean;
+  vendor_match: boolean;
+  amount_match: boolean;
+  verified: boolean;
+  ocr_details: {
+    invoice_number: string;
+    vendor_name: string;
+    amount: number;
+    date?: string;
+    gst?: string;
+  };
+  discrepancies: Array<{
+    field: string;
+    user_input: any;
+    ocr_extracted: any;
+  }>;
+}
 
 const UploadInvoice = () => {
   const { toast } = useToast();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [ocrData, setOcrData] = useState<any>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  
+  // Form inputs
+  const [projectId, setProjectId] = useState("1");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [vendorName, setVendorName] = useState("");
+  const [amount, setAmount] = useState("");
+  
+  // Results
+  const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
   const [riskScore, setRiskScore] = useState<number | null>(null);
+  const [riskLevel, setRiskLevel] = useState<string | null>(null);
 
   const handleFileSelect = (file: File) => {
     setSelectedFile(file);
-    setOcrData(null);
+    setVerificationResult(null);
     setRiskScore(null);
-    
-    // Simulate OCR extraction
-    setTimeout(() => {
-      setOcrData({
-        invoiceNumber: "INV-2024-" + Math.floor(Math.random() * 1000),
-        vendorName: "Sample Vendor Pvt. Ltd.",
-        date: new Date().toISOString().split("T")[0],
-        amount: "₹" + (Math.floor(Math.random() * 500000) + 50000).toLocaleString(),
-        items: "Construction Materials, Labor Charges",
-      });
-      
-      toast({
-        title: "OCR Complete",
-        description: "Invoice data extracted successfully",
-      });
-    }, 1500);
+    setRiskLevel(null);
   };
 
-  const handleAnalyze = () => {
-    setIsAnalyzing(true);
-    
-    // Simulate AI analysis
-    setTimeout(() => {
-      const score = Math.floor(Math.random() * 100);
-      setRiskScore(score);
-      setIsAnalyzing(false);
-      
+  const handleUpload = async () => {
+    if (!selectedFile || !invoiceNumber || !vendorName || !amount) {
       toast({
-        title: "Analysis Complete",
-        description: `Risk score: ${score}%`,
+        title: "Missing Information",
+        description: "Please fill all fields and select a file",
+        variant: "destructive",
       });
-    }, 2000);
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      formData.append("project_id", projectId);
+      formData.append("invoice_number", invoiceNumber);
+      formData.append("vendor_name", vendorName);
+      formData.append("amount", amount);
+
+      const token = localStorage.getItem("access_token");
+      const response = await fetch("http://localhost:8000/invoices/", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Upload failed");
+      }
+
+      const result = await response.json();
+
+      setVerificationResult(result.verification);
+      setRiskScore(result.ai_risk.score);
+      setRiskLevel(result.ai_risk.level);
+
+      toast({
+        title: "Invoice Uploaded Successfully",
+        description: `Risk Level: ${result.ai_risk.level.toUpperCase()}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to upload invoice",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleClear = () => {
     setSelectedFile(null);
-    setOcrData(null);
+    setVerificationResult(null);
     setRiskScore(null);
+    setRiskLevel(null);
+    setInvoiceNumber("");
+    setVendorName("");
+    setAmount("");
   };
 
   return (
@@ -83,6 +147,54 @@ const UploadInvoice = () => {
             <div className="space-y-6">
               <Card className="p-6">
                 <h3 className="mb-4 text-lg font-heading font-semibold">
+                  Invoice Details
+                </h3>
+                
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <Label>Project</Label>
+                    <Select value={projectId} onValueChange={setProjectId}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">Road Development Phase 2</SelectItem>
+                        <SelectItem value="2">School Building</SelectItem>
+                        <SelectItem value="3">Water Pipeline</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <Label>Invoice Number</Label>
+                    <Input
+                      value={invoiceNumber}
+                      onChange={(e) => setInvoiceNumber(e.target.value)}
+                      placeholder="INV-2024-001"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label>Vendor Name</Label>
+                    <Input
+                      value={vendorName}
+                      onChange={(e) => setVendorName(e.target.value)}
+                      placeholder="ABC Constructions Ltd"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label>Amount (₹)</Label>
+                    <Input
+                      type="number"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="50000"
+                    />
+                  </div>
+                </div>
+
+                <h3 className="mb-4 text-lg font-heading font-semibold">
                   Upload Document
                 </h3>
                 <UploadBox
@@ -90,6 +202,24 @@ const UploadInvoice = () => {
                   selectedFile={selectedFile}
                   onClear={handleClear}
                 />
+                
+                <Button
+                  onClick={handleUpload}
+                  className="mt-6 w-full"
+                  disabled={isUploading || !selectedFile}
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <Brain className="mr-2 h-4 w-4" />
+                      Upload & Analyze
+                    </>
+                  )}
+                </Button>
               </Card>
 
               {selectedFile && (
@@ -111,46 +241,126 @@ const UploadInvoice = () => {
 
             {/* OCR & Analysis Section */}
             <div className="space-y-6">
-              {ocrData && (
+              {verificationResult && (
                 <Card className="p-6">
                   <div className="mb-4 flex items-center justify-between">
                     <h3 className="text-lg font-heading font-semibold">
-                      Extracted Information
+                      OCR Verification Results
                     </h3>
-                    <CheckCircle className="h-5 w-5 text-success" />
+                    {verificationResult.verified ? (
+                      <Badge variant="default" className="bg-success">
+                        <CheckCircle className="mr-1 h-3 w-3" />
+                        Verified
+                      </Badge>
+                    ) : (
+                      <Badge variant="destructive">
+                        <AlertTriangle className="mr-1 h-3 w-3" />
+                        Discrepancies Found
+                      </Badge>
+                    )}
                   </div>
+
+                  {!verificationResult.verified && verificationResult.discrepancies.length > 0 && (
+                    <Alert variant="destructive" className="mb-4">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription>
+                        {verificationResult.discrepancies.length} field(s) don't match OCR extraction
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
                   <div className="space-y-4">
-                    <div>
-                      <Label>Invoice Number</Label>
-                      <Input value={ocrData.invoiceNumber} readOnly />
+                    {/* Invoice Number Comparison */}
+                    <div className="rounded-lg border p-4">
+                      <div className="mb-2 flex items-center justify-between">
+                        <Label className="text-sm font-semibold">Invoice Number</Label>
+                        {verificationResult.invoice_number_match ? (
+                          <Check className="h-4 w-4 text-success" />
+                        ) : (
+                          <X className="h-4 w-4 text-danger" />
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Your Input</p>
+                          <Input value={invoiceNumber} readOnly className="h-8 text-sm" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">OCR Extracted</p>
+                          <Input 
+                            value={verificationResult.ocr_details.invoice_number || "Not found"} 
+                            readOnly 
+                            className={`h-8 text-sm ${!verificationResult.invoice_number_match ? 'border-danger bg-danger/5' : ''}`}
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <Label>Vendor Name</Label>
-                      <Input value={ocrData.vendorName} readOnly />
-                    </div>
-                    <div>
-                      <Label>Date</Label>
-                      <Input value={ocrData.date} readOnly />
-                    </div>
-                    <div>
-                      <Label>Amount</Label>
-                      <Input value={ocrData.amount} readOnly />
-                    </div>
-                    <div>
-                      <Label>Items/Description</Label>
-                      <Input value={ocrData.items} readOnly />
-                    </div>
-                  </div>
 
-                  <Button
-                    onClick={handleAnalyze}
-                    className="mt-6 w-full"
-                    disabled={isAnalyzing}
-                  >
-                    <Brain className="mr-2 h-4 w-4" />
-                    {isAnalyzing ? "Analyzing..." : "Run AI Analysis"}
-                  </Button>
+                    {/* Vendor Name Comparison */}
+                    <div className="rounded-lg border p-4">
+                      <div className="mb-2 flex items-center justify-between">
+                        <Label className="text-sm font-semibold">Vendor Name</Label>
+                        {verificationResult.vendor_match ? (
+                          <Check className="h-4 w-4 text-success" />
+                        ) : (
+                          <X className="h-4 w-4 text-danger" />
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Your Input</p>
+                          <Input value={vendorName} readOnly className="h-8 text-sm" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">OCR Extracted</p>
+                          <Input 
+                            value={verificationResult.ocr_details.vendor_name || "Not found"} 
+                            readOnly 
+                            className={`h-8 text-sm ${!verificationResult.vendor_match ? 'border-danger bg-danger/5' : ''}`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Amount Comparison */}
+                    <div className="rounded-lg border p-4">
+                      <div className="mb-2 flex items-center justify-between">
+                        <Label className="text-sm font-semibold">Amount</Label>
+                        {verificationResult.amount_match ? (
+                          <Check className="h-4 w-4 text-success" />
+                        ) : (
+                          <X className="h-4 w-4 text-danger" />
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Your Input</p>
+                          <Input value={`₹${amount}`} readOnly className="h-8 text-sm" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">OCR Extracted</p>
+                          <Input 
+                            value={verificationResult.ocr_details.amount ? `₹${verificationResult.ocr_details.amount}` : "Not found"} 
+                            readOnly 
+                            className={`h-8 text-sm ${!verificationResult.amount_match ? 'border-danger bg-danger/5' : ''}`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Additional OCR Details */}
+                    {(verificationResult.ocr_details.date || verificationResult.ocr_details.gst) && (
+                      <div className="rounded-lg border p-4 bg-muted/30">
+                        <Label className="text-sm font-semibold mb-2">Additional Details</Label>
+                        {verificationResult.ocr_details.date && (
+                          <p className="text-sm"><span className="text-muted-foreground">Date:</span> {verificationResult.ocr_details.date}</p>
+                        )}
+                        {verificationResult.ocr_details.gst && (
+                          <p className="text-sm"><span className="text-muted-foreground">GST:</span> {verificationResult.ocr_details.gst}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </Card>
               )}
 
@@ -168,17 +378,23 @@ const UploadInvoice = () => {
                   </div>
 
                   <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
-                    <h4 className="font-medium">Risk Factors Detected:</h4>
+                    <h4 className="font-medium">Analysis Summary:</h4>
                     <ul className="space-y-2 text-sm">
+                      {verificationResult && !verificationResult.verified && (
+                        <li className="flex items-start gap-2">
+                          <span className="text-danger">•</span>
+                          <span>OCR verification failed - manual review required</span>
+                        </li>
+                      )}
                       {riskScore > 70 && (
                         <>
                           <li className="flex items-start gap-2">
                             <span className="text-danger">•</span>
-                            <span>Duplicate invoice number found in database</span>
+                            <span>High risk detected - immediate attention needed</span>
                           </li>
                           <li className="flex items-start gap-2">
                             <span className="text-danger">•</span>
-                            <span>Amount exceeds project budget threshold</span>
+                            <span>Amount or vendor discrepancies found</span>
                           </li>
                         </>
                       )}
@@ -186,24 +402,28 @@ const UploadInvoice = () => {
                         <>
                           <li className="flex items-start gap-2">
                             <span className="text-warning">•</span>
-                            <span>Vendor not in approved list</span>
+                            <span>Medium risk - additional verification recommended</span>
                           </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-warning">•</span>
-                            <span>Invoice date inconsistency detected</span>
-                          </li>
+                          {verificationResult && !verificationResult.verified && (
+                            <li className="flex items-start gap-2">
+                              <span className="text-warning">•</span>
+                              <span>Some fields don't match OCR extraction</span>
+                            </li>
+                          )}
                         </>
                       )}
                       {riskScore < 40 && (
                         <>
                           <li className="flex items-start gap-2">
                             <span className="text-success">✓</span>
-                            <span>All checks passed successfully</span>
+                            <span>Low risk - invoice appears legitimate</span>
                           </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-success">✓</span>
-                            <span>Vendor verified and in good standing</span>
-                          </li>
+                          {verificationResult && verificationResult.verified && (
+                            <li className="flex items-start gap-2">
+                              <span className="text-success">✓</span>
+                              <span>All fields verified with OCR</span>
+                            </li>
+                          )}
                         </>
                       )}
                     </ul>
