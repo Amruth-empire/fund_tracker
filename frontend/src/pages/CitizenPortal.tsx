@@ -1,0 +1,255 @@
+import Navbar from "@/components/Navbar";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import {
+  Search,
+  MapPin,
+  IndianRupee,
+  TrendingUp,
+  Shield,
+  Download,
+  CheckCircle,
+} from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
+
+const CitizenPortal = () => {
+  const projectData = [
+    { month: "Jan", allocated: 40, utilized: 35 },
+    { month: "Feb", allocated: 45, utilized: 38 },
+    { month: "Mar", allocated: 50, utilized: 42 },
+    { month: "Apr", allocated: 48, utilized: 45 },
+    { month: "May", allocated: 55, utilized: 48 },
+    { month: "Jun", allocated: 52, utilized: 50 },
+  ];
+
+  const projects = [
+    {
+      name: "Rural Road Development",
+      location: "Gram Panchayat - Rampur",
+      allocated: "₹45,00,000",
+      utilized: "₹32,40,000",
+      progress: 72,
+      status: "Ongoing",
+      aiVerified: true,
+    },
+    {
+      name: "Primary School Building",
+      location: "Gram Panchayat - Shivnagar",
+      allocated: "₹32,00,000",
+      utilized: "₹14,40,000",
+      progress: 45,
+      status: "Ongoing",
+      aiVerified: true,
+    },
+    {
+      name: "Water Supply Pipeline",
+      location: "Gram Panchayat - Madhubani",
+      allocated: "₹28,00,000",
+      utilized: "₹28,00,000",
+      progress: 100,
+      status: "Completed",
+      aiVerified: true,
+    },
+  ];
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Navbar />
+
+      {/* Hero Section */}
+      <section className="gradient-primary py-16 text-white">
+        <div className="container mx-auto px-6 text-center">
+          <Shield className="mx-auto mb-4 h-16 w-16" />
+          <h1 className="mb-4 text-4xl font-heading font-bold">
+            Citizen Transparency Portal
+          </h1>
+          <p className="mb-8 text-lg opacity-90">
+            Track development projects and fund utilization in your area with complete transparency
+          </p>
+          <div className="mx-auto max-w-2xl">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Search for projects in your panchayat..."
+                className="bg-white text-foreground"
+              />
+              <Button variant="secondary" size="lg">
+                <Search className="mr-2 h-4 w-4" />
+                Search
+              </Button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <main className="container mx-auto p-8">
+        {/* Stats Overview */}
+        <div className="mb-8 grid gap-6 md:grid-cols-4">
+          <Card className="p-6 text-center">
+            <IndianRupee className="mx-auto mb-2 h-8 w-8 text-primary" />
+            <div className="mb-1 text-3xl font-heading font-bold text-primary">
+              ₹2.4 Cr
+            </div>
+            <div className="text-sm text-muted-foreground">Total Allocated</div>
+          </Card>
+          <Card className="p-6 text-center">
+            <TrendingUp className="mx-auto mb-2 h-8 w-8 text-secondary" />
+            <div className="mb-1 text-3xl font-heading font-bold text-secondary">
+              ₹1.8 Cr
+            </div>
+            <div className="text-sm text-muted-foreground">Funds Utilized</div>
+          </Card>
+          <Card className="p-6 text-center">
+            <CheckCircle className="mx-auto mb-2 h-8 w-8 text-success" />
+            <div className="mb-1 text-3xl font-heading font-bold text-success">
+              156
+            </div>
+            <div className="text-sm text-muted-foreground">Active Projects</div>
+          </Card>
+          <Card className="p-6 text-center">
+            <Shield className="mx-auto mb-2 h-8 w-8 text-accent" />
+            <div className="mb-1 text-3xl font-heading font-bold text-accent">
+              98.5%
+            </div>
+            <div className="text-sm text-muted-foreground">AI Verified</div>
+          </Card>
+        </div>
+
+        {/* Fund Usage Chart */}
+        <Card className="mb-8 p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-2xl font-heading font-bold">
+              Fund Allocation vs Utilization
+            </h2>
+            <Button variant="outline" size="sm">
+              <Download className="mr-2 h-4 w-4" />
+              Download Report
+            </Button>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={projectData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="month" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="allocated" fill="hsl(210, 100%, 42%)" name="Allocated (₹L)" />
+              <Bar dataKey="utilized" fill="hsl(145, 70%, 45%)" name="Utilized (₹L)" />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+
+        {/* Projects List */}
+        <div className="mb-8">
+          <h2 className="mb-6 text-2xl font-heading font-bold">
+            Active Development Projects
+          </h2>
+          <div className="space-y-6">
+            {projects.map((project, index) => (
+              <Card key={index} className="p-6 hover-lift">
+                <div className="mb-4 flex items-start justify-between">
+                  <div>
+                    <h3 className="mb-1 text-xl font-heading font-semibold">
+                      {project.name}
+                    </h3>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <MapPin className="h-4 w-4" />
+                      {project.location}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Badge
+                      className={
+                        project.status === "Completed"
+                          ? "bg-success-light text-success"
+                          : "bg-primary/10 text-primary"
+                      }
+                    >
+                      {project.status}
+                    </Badge>
+                    {project.aiVerified && (
+                      <Badge className="bg-accent/10 text-accent">
+                        <Shield className="mr-1 h-3 w-3" />
+                        AI Verified
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mb-4 grid gap-4 md:grid-cols-3">
+                  <div>
+                    <p className="mb-1 text-sm text-muted-foreground">
+                      Funds Allocated
+                    </p>
+                    <p className="text-lg font-heading font-bold">
+                      {project.allocated}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="mb-1 text-sm text-muted-foreground">
+                      Funds Utilized
+                    </p>
+                    <p className="text-lg font-heading font-bold text-success">
+                      {project.utilized}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="mb-1 text-sm text-muted-foreground">
+                      Progress
+                    </p>
+                    <p className="text-lg font-heading font-bold">
+                      {project.progress}%
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <Progress value={project.progress} className="h-2" />
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+
+        {/* Download Section */}
+        <Card className="gradient-secondary p-8 text-center text-white">
+          <Download className="mx-auto mb-4 h-12 w-12" />
+          <h3 className="mb-2 text-2xl font-heading font-bold">
+            Download Public Reports
+          </h3>
+          <p className="mb-6 opacity-90">
+            Access detailed reports on fund utilization and project progress
+          </p>
+          <Button variant="secondary" size="lg">
+            Download All Reports
+          </Button>
+        </Card>
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t py-8">
+        <div className="container mx-auto px-6 text-center text-sm text-muted-foreground">
+          <p className="mb-2">
+            This portal ensures complete transparency in Panchayat fund management
+          </p>
+          <p>
+            Powered by AI-based fraud detection and automated verification systems
+          </p>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+export default CitizenPortal;
