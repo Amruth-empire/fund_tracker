@@ -22,7 +22,7 @@ def register_user(db: Session, data: UserCreate) -> User:
     return user
 
 
-def login_user(db: Session, data: UserLogin) -> str | None:
+def login_user(db: Session, data: UserLogin) -> dict | None:
     user = db.query(User).filter(User.email == data.email).first()
     if not user:
         return None
@@ -31,4 +31,7 @@ def login_user(db: Session, data: UserLogin) -> str | None:
         return None
 
     token = create_access_token({"id": user.id, "email": user.email, "role": user.role})
-    return token
+    return {
+        "access_token": token,
+        "user": user
+    }

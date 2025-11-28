@@ -1,16 +1,23 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Shield, LogOut } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface NavbarProps {
   isLoggedIn?: boolean;
   userRole?: "admin" | "contractor";
 }
 
-const Navbar = ({ isLoggedIn = false, userRole }: NavbarProps) => {
+const Navbar = ({ isLoggedIn: isLoggedInProp, userRole: userRoleProp }: NavbarProps) => {
   const navigate = useNavigate();
+  const { user, isAuthenticated, logout } = useAuth();
+  
+  // Use auth context if no props provided
+  const isLoggedIn = isLoggedInProp ?? isAuthenticated;
+  const userRole = userRoleProp ?? user?.role;
 
   const handleLogout = () => {
+    logout();
     navigate("/");
   };
 

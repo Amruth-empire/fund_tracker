@@ -4,6 +4,7 @@ sqlalchemy
 psycopg2-binary
 python-dotenv
 pydantic
+pydantic-settings
 python-multipart
 Pillow
 pytesseract
@@ -12,3 +13,5 @@ numpy
 pandas
 python-jose[cryptography]
 passlib[bcrypt]
+email-validator
+bcrypt==4.1.2

@@ -11,6 +11,77 @@ import {
   CheckCircle,
   AlertTriangle,
 } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+
+const AnimatedCounter = ({ 
+  end, 
+  duration = 2000, 
+  prefix = "", 
+  suffix = "",
+  decimals = 0,
+  className = ""
+}: { 
+  end: number; 
+  duration?: number; 
+  prefix?: string; 
+  suffix?: string;
+  decimals?: number;
+  className?: string;
+}) => {
+  const [count, setCount] = useState(0);
+  const [isVisible, setIsVisible] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !isVisible) {
+          setIsVisible(true);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
+
+    return () => observer.disconnect();
+  }, [isVisible]);
+
+  useEffect(() => {
+    if (!isVisible) return;
+
+    let startTime: number | null = null;
+    let animationFrame: number;
+
+    const animate = (currentTime: number) => {
+      if (!startTime) startTime = currentTime;
+      const progress = Math.min((currentTime - startTime) / duration, 1);
+
+      // Easing function for smooth animation
+      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+      
+      setCount(end * easeOutQuart);
+
+      if (progress < 1) {
+        animationFrame = requestAnimationFrame(animate);
+      } else {
+        setCount(end);
+      }
+    };
+
+    animationFrame = requestAnimationFrame(animate);
+
+    return () => cancelAnimationFrame(animationFrame);
+  }, [end, duration, isVisible]);
+
+  return (
+    <div ref={ref} className={className}>
+      {prefix}{count.toFixed(decimals)}{suffix}
+    </div>
+  );
+};
 
 const Index = () => {
   const features = [
@@ -70,12 +141,10 @@ const Index = () => {
 
       {/* Hero Section */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 gradient-hero opacity-10" />
         <div className="container relative mx-auto px-6 py-24">
           <div className="mx-auto max-w-4xl text-center animate-fade-in">
             <h1 className="mb-6 text-5xl font-heading font-bold leading-tight md:text-6xl">
-              AI-Based Panchayat Fund
-              <span className="gradient-primary bg-clip-text text-transparent"> Utilization Tracker</span>
+              AI-Based Panchayat Fund Utilization Tracker
             </h1>
             <p className="mb-8 text-xl text-muted-foreground">
               Ensuring transparency and accountability in rural development through
@@ -107,19 +176,36 @@ const Index = () => {
         <div className="container mx-auto px-6">
           <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
             <div className="text-center">
-              <div className="mb-2 text-4xl font-heading font-bold text-primary">₹2.4Cr</div>
+              <AnimatedCounter 
+                end={2.4} 
+                decimals={1}
+                prefix="₹"
+                suffix="Cr"
+                className="mb-2 text-4xl font-heading font-bold text-primary"
+              />
               <div className="text-sm text-muted-foreground">Total Funds Tracked</div>
             </div>
             <div className="text-center">
-              <div className="mb-2 text-4xl font-heading font-bold text-secondary">156</div>
+              <AnimatedCounter 
+                end={156}
+                className="mb-2 text-4xl font-heading font-bold text-secondary"
+              />
               <div className="text-sm text-muted-foreground">Active Projects</div>
             </div>
             <div className="text-center">
-              <div className="mb-2 text-4xl font-heading font-bold text-accent">98.5%</div>
+              <AnimatedCounter 
+                end={98.5}
+                decimals={1}
+                suffix="%"
+                className="mb-2 text-4xl font-heading font-bold text-accent"
+              />
               <div className="text-sm text-muted-foreground">Detection Accuracy</div>
             </div>
             <div className="text-center">
-              <div className="mb-2 text-4xl font-heading font-bold text-warning">24</div>
+              <AnimatedCounter 
+                end={24}
+                className="mb-2 text-4xl font-heading font-bold text-warning"
+              />
               <div className="text-sm text-muted-foreground">Frauds Prevented</div>
             </div>
           </div>

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield } from "lucide-react";
+import { Shield, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,15 +13,37 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Login = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { login, isAuthenticated, user } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"admin" | "contractor">("admin");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const redirectPath = user.role === "admin" ? "/admin" : "/contractor";
+      navigate(redirectPath);
+    }
+  }, [isAuthenticated, user, navigate]);
+
+  // Auto-fill credentials based on selected role
+  useEffect(() => {
+    if (role === "admin") {
+      setEmail("admin@panchayat.gov.in");
+      setPassword("admin@123");
+    } else {
+      setEmail("contractor@panchayat.gov.in");
+      setPassword("contractor@123");
+    }
+  }, [role]);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Simple validation
@@ -34,16 +56,25 @@ const Login = () => {
       return;
     }
 
-    toast({
-      title: "Login Successful",
-      description: `Welcome back, ${role}!`,
-    });
+    setIsLoading(true);
 
-    // Navigate based on role
-    if (role === "admin") {
-      navigate("/admin");
-    } else {
-      navigate("/contractor");
+    try {
+      await login(email, password);
+      
+      toast({
+        title: "Login Successful",
+        description: `Welcome back!`,
+      });
+
+      // Navigation will be handled by the useEffect above
+    } catch (error: any) {
+      toast({
+        title: "Login Failed",
+        description: error.message || "Invalid email or password",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -96,8 +127,15 @@ const Login = () => {
             </Select>
           </div>
 
-          <Button type="submit" className="w-full" size="lg">
-            Sign In
+          <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Signing In...
+              </>
+            ) : (
+              "Sign In"
+            )}
           </Button>
         </form>
 

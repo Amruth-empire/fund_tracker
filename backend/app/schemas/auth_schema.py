@@ -13,6 +13,17 @@ class UserCreate(BaseModel):
     role: str  # "admin" or "contractor"
 
 
+class UserResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+    role: str
+
+    class Config:
+        from_attributes = True
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    user: UserResponse
