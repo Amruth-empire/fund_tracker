@@ -23,19 +23,12 @@ interface VerificationResult {
   invoice_number_match: boolean;
   vendor_match: boolean;
   amount_match: boolean;
-  verified: boolean;
-  ocr_details: {
-    invoice_number: string;
-    vendor_name: string;
-    amount: number;
-    date?: string;
-    gst?: string;
-  };
-  discrepancies: Array<{
-    field: string;
-    user_input: any;
-    ocr_extracted: any;
-  }>;
+}
+
+interface OCRFields {
+  invoice_number_ocr: string;
+  vendor_name_ocr: string;
+  amount_ocr: string;
 }
 
 const UploadInvoice = () => {
@@ -51,14 +44,20 @@ const UploadInvoice = () => {
   
   // Results
   const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
+  const [ocrFields, setOcrFields] = useState<OCRFields | null>(null);
+  const [ocrTable, setOcrTable] = useState<string[][] | null>(null);
   const [riskScore, setRiskScore] = useState<number | null>(null);
   const [riskLevel, setRiskLevel] = useState<string | null>(null);
+  const [fraudScore, setFraudScore] = useState<number | null>(null);
 
   const handleFileSelect = (file: File) => {
     setSelectedFile(file);
     setVerificationResult(null);
+    setOcrFields(null);
+    setOcrTable(null);
     setRiskScore(null);
     setRiskLevel(null);
+    setFraudScore(null);
   };
 
   const handleUpload = async () => {
@@ -97,8 +96,11 @@ const UploadInvoice = () => {
       const result = await response.json();
 
       setVerificationResult(result.verification);
+      setOcrFields(result.ocr_fields);
+      setOcrTable(result.ocr_table);
       setRiskScore(result.ai_risk.score);
       setRiskLevel(result.ai_risk.level);
+      setFraudScore(result.ai_risk.fraud_score);
 
       toast({
         title: "Invoice Uploaded Successfully",
@@ -118,8 +120,11 @@ const UploadInvoice = () => {
   const handleClear = () => {
     setSelectedFile(null);
     setVerificationResult(null);
+    setOcrFields(null);
+    setOcrTable(null);
     setRiskScore(null);
     setRiskLevel(null);
+    setFraudScore(null);
     setInvoiceNumber("");
     setVendorName("");
     setAmount("");
@@ -241,13 +246,15 @@ const UploadInvoice = () => {
 
             {/* OCR & Analysis Section */}
             <div className="space-y-6">
-              {verificationResult && (
+              {verificationResult && ocrFields && (
                 <Card className="p-6">
                   <div className="mb-4 flex items-center justify-between">
                     <h3 className="text-lg font-heading font-semibold">
                       OCR Verification Results
                     </h3>
-                    {verificationResult.verified ? (
+                    {verificationResult.invoice_number_match && 
+                     verificationResult.vendor_match && 
+                     verificationResult.amount_match ? (
                       <Badge variant="default" className="bg-success">
                         <CheckCircle className="mr-1 h-3 w-3" />
                         Verified
@@ -260,11 +267,13 @@ const UploadInvoice = () => {
                     )}
                   </div>
 
-                  {!verificationResult.verified && verificationResult.discrepancies.length > 0 && (
+                  {(!verificationResult.invoice_number_match || 
+                    !verificationResult.vendor_match || 
+                    !verificationResult.amount_match) && (
                     <Alert variant="destructive" className="mb-4">
                       <AlertTriangle className="h-4 w-4" />
                       <AlertDescription>
-                        {verificationResult.discrepancies.length} field(s) don't match OCR extraction
+                        Some fields don't match OCR extraction - Fraud Score: {fraudScore}
                       </AlertDescription>
                     </Alert>
                   )}
@@ -288,7 +297,7 @@ const UploadInvoice = () => {
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">OCR Extracted</p>
                           <Input 
-                            value={verificationResult.ocr_details.invoice_number || "Not found"} 
+                            value={ocrFields.invoice_number_ocr || "Not found"} 
                             readOnly 
                             className={`h-8 text-sm ${!verificationResult.invoice_number_match ? 'border-danger bg-danger/5' : ''}`}
                           />
@@ -314,7 +323,7 @@ const UploadInvoice = () => {
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">OCR Extracted</p>
                           <Input 
-                            value={verificationResult.ocr_details.vendor_name || "Not found"} 
+                            value={ocrFields.vendor_name_ocr || "Not found"} 
                             readOnly 
                             className={`h-8 text-sm ${!verificationResult.vendor_match ? 'border-danger bg-danger/5' : ''}`}
                           />
@@ -340,27 +349,54 @@ const UploadInvoice = () => {
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">OCR Extracted</p>
                           <Input 
-                            value={verificationResult.ocr_details.amount ? `₹${verificationResult.ocr_details.amount}` : "Not found"} 
+                            value={ocrFields.amount_ocr ? `₹${ocrFields.amount_ocr}` : "Not found"} 
                             readOnly 
                             className={`h-8 text-sm ${!verificationResult.amount_match ? 'border-danger bg-danger/5' : ''}`}
                           />
                         </div>
                       </div>
                     </div>
-
-                    {/* Additional OCR Details */}
-                    {(verificationResult.ocr_details.date || verificationResult.ocr_details.gst) && (
-                      <div className="rounded-lg border p-4 bg-muted/30">
-                        <Label className="text-sm font-semibold mb-2">Additional Details</Label>
-                        {verificationResult.ocr_details.date && (
-                          <p className="text-sm"><span className="text-muted-foreground">Date:</span> {verificationResult.ocr_details.date}</p>
-                        )}
-                        {verificationResult.ocr_details.gst && (
-                          <p className="text-sm"><span className="text-muted-foreground">GST:</span> {verificationResult.ocr_details.gst}</p>
-                        )}
-                      </div>
-                    )}
                   </div>
+                </Card>
+              )}
+
+              {/* OCR Table Extraction */}
+              {ocrTable && ocrTable.length > 0 && (
+                <Card className="p-6">
+                  <h3 className="mb-4 text-lg font-heading font-semibold">
+                    Extracted Invoice Items
+                  </h3>
+                  
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          {ocrTable[0].map((header, idx) => (
+                            <th key={idx} className="p-3 text-left text-sm font-semibold">
+                              {header}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ocrTable.slice(1).map((row, rowIdx) => (
+                          <tr key={rowIdx} className="border-b hover:bg-muted/20">
+                            {row.map((cell, cellIdx) => (
+                              <td key={cellIdx} className="p-3 text-sm">
+                                {cell}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {ocrTable.length === 1 && (
+                    <p className="mt-4 text-center text-sm text-muted-foreground">
+                      No line items detected in the invoice
+                    </p>
+                  )}
                 </Card>
               )}
 
@@ -380,51 +416,62 @@ const UploadInvoice = () => {
                   <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
                     <h4 className="font-medium">Analysis Summary:</h4>
                     <ul className="space-y-2 text-sm">
-                      {verificationResult && !verificationResult.verified && (
+                      {fraudScore !== null && fraudScore > 0 && (
                         <li className="flex items-start gap-2">
                           <span className="text-danger">•</span>
-                          <span>OCR verification failed - manual review required</span>
+                          <span>OCR Fraud Score: {fraudScore} - Manual review required</span>
+                        </li>
+                      )}
+                      {verificationResult && !verificationResult.invoice_number_match && (
+                        <li className="flex items-start gap-2">
+                          <span className="text-danger">•</span>
+                          <span>Invoice number mismatch detected</span>
+                        </li>
+                      )}
+                      {verificationResult && !verificationResult.vendor_match && (
+                        <li className="flex items-start gap-2">
+                          <span className="text-danger">•</span>
+                          <span>Vendor name doesn't match OCR extraction</span>
+                        </li>
+                      )}
+                      {verificationResult && !verificationResult.amount_match && (
+                        <li className="flex items-start gap-2">
+                          <span className="text-danger">•</span>
+                          <span>Amount discrepancy found</span>
                         </li>
                       )}
                       {riskScore > 70 && (
-                        <>
-                          <li className="flex items-start gap-2">
-                            <span className="text-danger">•</span>
-                            <span>High risk detected - immediate attention needed</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-danger">•</span>
-                            <span>Amount or vendor discrepancies found</span>
-                          </li>
-                        </>
+                        <li className="flex items-start gap-2">
+                          <span className="text-danger">•</span>
+                          <span>High risk detected - immediate attention needed</span>
+                        </li>
                       )}
                       {riskScore >= 40 && riskScore <= 70 && (
-                        <>
-                          <li className="flex items-start gap-2">
-                            <span className="text-warning">•</span>
-                            <span>Medium risk - additional verification recommended</span>
-                          </li>
-                          {verificationResult && !verificationResult.verified && (
-                            <li className="flex items-start gap-2">
-                              <span className="text-warning">•</span>
-                              <span>Some fields don't match OCR extraction</span>
-                            </li>
-                          )}
-                        </>
+                        <li className="flex items-start gap-2">
+                          <span className="text-warning">•</span>
+                          <span>Medium risk - additional verification recommended</span>
+                        </li>
                       )}
-                      {riskScore < 40 && (
+                      {riskScore < 40 && verificationResult && 
+                       verificationResult.invoice_number_match && 
+                       verificationResult.vendor_match && 
+                       verificationResult.amount_match && (
                         <>
                           <li className="flex items-start gap-2">
                             <span className="text-success">✓</span>
                             <span>Low risk - invoice appears legitimate</span>
                           </li>
-                          {verificationResult && verificationResult.verified && (
-                            <li className="flex items-start gap-2">
-                              <span className="text-success">✓</span>
-                              <span>All fields verified with OCR</span>
-                            </li>
-                          )}
+                          <li className="flex items-start gap-2">
+                            <span className="text-success">✓</span>
+                            <span>All fields verified with OCR</span>
+                          </li>
                         </>
+                      )}
+                      {ocrTable && ocrTable.length > 1 && (
+                        <li className="flex items-start gap-2">
+                          <span className="text-success">✓</span>
+                          <span>{ocrTable.length - 1} line items extracted from invoice</span>
+                        </li>
                       )}
                     </ul>
                   </div>

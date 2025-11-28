@@ -8,6 +8,7 @@ pydantic-settings
 python-multipart
 Pillow
 pytesseract
+opencv-python
 scikit-learn
 numpy
 pandas

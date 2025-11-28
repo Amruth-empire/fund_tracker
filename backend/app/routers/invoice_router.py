@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -12,10 +12,10 @@ router = APIRouter()
 
 @router.post("/")
 async def upload_invoice(
-    project_id: int,
-    invoice_number: str,
-    vendor_name: str,
-    amount: float,
+    project_id: int = Form(...),
+    invoice_number: str = Form(...),
+    vendor_name: str = Form(...),
+    amount: float = Form(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
