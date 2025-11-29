@@ -1,6 +1,7 @@
 from pathlib import Path
 from sqlalchemy.orm import Session
 import os
+import re
 from uuid import uuid4
 
 from app.models.invoice_model import Invoice
@@ -43,10 +44,15 @@ def verify_invoice(filepath: str, user_data):
     
     # Invoice number comparison - flexible matching
     if fields["invoice_number_ocr"] and user_data.invoice_number:
-        ocr_inv = fields["invoice_number_ocr"].lower().replace(" ", "").replace("-", "").replace("/", "")
-        user_inv = user_data.invoice_number.lower().replace(" ", "").replace("-", "").replace("/", "")
-        # Match if OCR contains user input or vice versa
-        verification["invoice_number_match"] = (ocr_inv == user_inv or ocr_inv in user_inv or user_inv in ocr_inv)
+        # Clean both values - remove all non-alphanumeric except digits
+        ocr_inv = re.sub(r'[^\d]', '', fields["invoice_number_ocr"])
+        user_inv = re.sub(r'[^\d]', '', str(user_data.invoice_number))
+        # Match if numbers are equal or one contains the other
+        verification["invoice_number_match"] = (
+            ocr_inv == user_inv or 
+            (len(ocr_inv) > 0 and ocr_inv in user_inv) or 
+            (len(user_inv) > 0 and user_inv in ocr_inv)
+        )
     
     # Vendor name comparison - fuzzy matching
     if fields["vendor_name_ocr"] and user_data.vendor_name:

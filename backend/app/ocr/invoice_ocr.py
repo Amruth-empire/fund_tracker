@@ -72,6 +72,10 @@ def extract_key_fields(img):
                         horizontal_distance = candidate['left'] - keyword_left
                         
                         if vertical_distance < 15 and horizontal_distance > 0 and horizontal_distance < 300:
+                            # Skip "NO" if looking for invoice number
+                            if key_type == "invoice" and candidate['text'].upper() == "NO":
+                                continue
+                            
                             if horizontal_distance < min_distance:
                                 min_distance = horizontal_distance
                                 closest_value = candidate['text']
@@ -79,47 +83,86 @@ def extract_key_fields(img):
                     if closest_value:
                         # Clean based on type
                         if key_type == "invoice":
-                            closest_value = re.sub(r'[^\w\-\/]', '', closest_value)
+                            # Only keep if it has digits
+                            if re.search(r'\d', closest_value):
+                                closest_value = re.sub(r'[^\w\-\/]', '', closest_value)
+                            else:
+                                closest_value = ""
                         elif key_type == "amount":
                             closest_value = re.sub(r'[^\d,\.]', '', closest_value).replace(',', '')
                         
-                        return closest_value
+                        if closest_value:
+                            return closest_value
         
         return ""
     
     # Extract invoice number
     results["invoice_number_ocr"] = find_value_near_keyword(keywords["invoice"], "invoice")
     
-    # Extract vendor name - look for company name near top of document
+    # Extract vendor name - look for company name near top of document (first line only)
     for item in ocr_data[:30]:  # Check first 30 items
-        if "company" in item['text'].lower() or "llc" in item['text'].lower():
-            # Get surrounding text to build company name
+        text_lower = item['text'].lower()
+        if "company" in text_lower or "llc" in text_lower or "ltd" in text_lower or "inc" in text_lower:
+            # Get only words on the same line (tight vertical tolerance)
             company_parts = []
             item_top = item['top']
             for candidate in ocr_data:
-                if abs(candidate['top'] - item_top) < 15:
-                    company_parts.append((candidate['left'], candidate['text']))
+                if abs(candidate['top'] - item_top) < 10:  # Stricter tolerance for same line
+                    # Skip if it looks like an address (contains numbers like "123" or "111-222")
+                    if not re.search(r'\d{3}', candidate['text']):
+                        company_parts.append((candidate['left'], candidate['text']))
             
-            company_parts.sort(key=lambda x: x[0])
-            results["vendor_name_ocr"] = " ".join([part[1] for part in company_parts])
-            break
+            if company_parts:
+                company_parts.sort(key=lambda x: x[0])
+                vendor_name = " ".join([part[1] for part in company_parts])
+                # Limit to reasonable length (first 50 characters)
+                results["vendor_name_ocr"] = vendor_name[:50].strip()
+                break
     
     # Extract amount
     results["amount_ocr"] = find_value_near_keyword(keywords["amount"], "amount")
     
-    # Fallback: Use regex on full text
-    if not results["invoice_number_ocr"] or not results["amount_ocr"]:
-        full_text = pytesseract.image_to_string(img)
-        
-        if not results["invoice_number_ocr"]:
-            invoice_match = re.search(r'invoice\s*#?\s*[:\-]?\s*(\d+)', full_text, re.IGNORECASE)
-            if invoice_match:
-                results["invoice_number_ocr"] = invoice_match.group(1).zfill(5)
-        
-        if not results["amount_ocr"]:
-            amount_match = re.search(r'amount\s+due\s*[:\-]?\s*\$?\s*([0-9,\.]+)', full_text, re.IGNORECASE)
-            if amount_match:
-                results["amount_ocr"] = amount_match.group(1).replace(',', '')
+    # Fallback: Use regex on full text for better extraction
+    full_text = pytesseract.image_to_string(img)
+    
+    if not results["invoice_number_ocr"] or results["invoice_number_ocr"].lower() in ["number", "no"]:
+        # Try multiple patterns for invoice number
+        patterns = [
+            r'invoice\s*no\s*[:\-]?\s*(\d+)',  # INVOICE NO 101
+            r'invoice\s*number\s*[:\-#]?\s*[#]?(\d+)',  # Invoice Number: #1234
+            r'inv[:\-\s]+(\d+)',  # INV: 101
+            r'#\s*(\d{3,})',  # #1234
+            r'invoice\s*[#]\s*(\d+)',  # Invoice #1234
+            r'(?:^|\n)(\d{3,})(?:\s|$)',  # Standalone 3+ digit number
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, full_text, re.IGNORECASE)
+            if match:
+                results["invoice_number_ocr"] = match.group(1)
+                break
+    
+    if not results["amount_ocr"] or results["amount_ocr"] == "":
+        # Try multiple patterns for total/subtotal amount
+        patterns = [
+            r'total\s*[:.\-]?\s*(?:rs\.?|₹)?\s*([0-9,\.]+)',  # Total: Rs. 2,800.00
+            r'sub\s*total\s*[:.\-]?\s*(?:rs\.?|₹)?\s*([0-9,\.]+)',  # Subtotal: Rs. 2,500.00
+            r'grand\s*total\s*[:.\-]?\s*(?:rs\.?|₹)?\s*([0-9,\.]+)',  # Grand Total
+            r'amount\s*[:.\-]?\s*(?:rs\.?|₹|\$)?\s*([0-9,\.]+)',  # Amount: 4800
+            r'(?:rs\.?|₹)\s*([0-9,\.]{4,})',  # Rs. 2,800.00 or ₹2800
+            r'\$\s*([0-9,\.]{4,})',  # $4800
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, full_text, re.IGNORECASE)
+            if match:
+                amount_str = match.group(1).replace(',', '').replace(' ', '')
+                # Only accept if it's a reasonable amount (more than 100)
+                try:
+                    amount_val = float(amount_str)
+                    if amount_val >= 100:
+                        results["amount_ocr"] = amount_str.split('.')[0]  # Get integer part
+                        break
+                except:
+                    continue
     
     return results
 

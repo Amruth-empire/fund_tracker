@@ -1,3 +1,4 @@
+import { useState } from "react";
 import Navbar from "@/components/Navbar";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,8 @@ import {
 } from "recharts";
 
 const CitizenPortal = () => {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filteredProjects, setFilteredProjects] = useState<typeof projects>([]);
   const projectData = [
     { month: "Jan", allocated: 40, utilized: 35 },
     { month: "Feb", allocated: 45, utilized: 38 },
@@ -64,6 +67,75 @@ const CitizenPortal = () => {
     },
   ];
 
+  const handleSearch = () => {
+    if (!searchQuery.trim()) {
+      setFilteredProjects([]);
+      return;
+    }
+
+    const query = searchQuery.toLowerCase();
+    const results = projects.filter(
+      (project) =>
+        project.name.toLowerCase().includes(query) ||
+        project.location.toLowerCase().includes(query) ||
+        project.status.toLowerCase().includes(query)
+    );
+    setFilteredProjects(results);
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleSearch();
+    }
+  };
+
+  const displayProjects = filteredProjects.length > 0 ? filteredProjects : projects;
+
+  const handleDownloadReport = () => {
+    // Create CSV content for fund allocation vs utilization
+    const csvContent = [
+      ["Month", "Allocated (₹L)", "Utilized (₹L)"],
+      ...projectData.map(row => [row.month, row.allocated, row.utilized])
+    ].map(row => row.join(',')).join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `fund-allocation-report-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadAllReports = () => {
+    // Create comprehensive CSV with all project details
+    const csvContent = [
+      ["Project Name", "Location", "Allocated", "Utilized", "Progress %", "Status", "AI Verified"],
+      ...projects.map(project => [
+        project.name,
+        project.location,
+        project.allocated,
+        project.utilized,
+        project.progress,
+        project.status,
+        project.aiVerified ? "Yes" : "No"
+      ])
+    ].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `all-projects-report-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -83,12 +155,24 @@ const CitizenPortal = () => {
               <Input
                 placeholder="Search for projects in your panchayat..."
                 className="bg-white text-foreground"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={handleKeyPress}
               />
-              <Button variant="secondary" size="lg">
+              <Button 
+                variant="secondary" 
+                size="lg"
+                onClick={handleSearch}
+              >
                 <Search className="mr-2 h-4 w-4" />
                 Search
               </Button>
             </div>
+            {searchQuery && filteredProjects.length === 0 && (
+              <p className="mt-4 text-sm text-white/80">
+                No projects found matching "{searchQuery}"
+              </p>
+            )}
           </div>
         </div>
       </section>
@@ -132,7 +216,11 @@ const CitizenPortal = () => {
             <h2 className="text-2xl font-heading font-bold">
               Fund Allocation vs Utilization
             </h2>
-            <Button variant="outline" size="sm">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleDownloadReport}
+            >
               <Download className="mr-2 h-4 w-4" />
               Download Report
             </Button>
@@ -152,11 +240,28 @@ const CitizenPortal = () => {
 
         {/* Projects List */}
         <div className="mb-8">
-          <h2 className="mb-6 text-2xl font-heading font-bold">
-            Active Development Projects
-          </h2>
+          <div className="mb-6 flex items-center justify-between">
+            <h2 className="text-2xl font-heading font-bold">
+              {searchQuery 
+                ? `Search Results (${displayProjects.length})`
+                : "Active Development Projects"
+              }
+            </h2>
+            {searchQuery && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  setSearchQuery("");
+                  setFilteredProjects([]);
+                }}
+              >
+                Clear Search
+              </Button>
+            )}
+          </div>
           <div className="space-y-6">
-            {projects.map((project, index) => (
+            {displayProjects.map((project, index) => (
               <Card key={index} className="p-6 hover-lift">
                 <div className="mb-4 flex items-start justify-between">
                   <div>
@@ -231,7 +336,11 @@ const CitizenPortal = () => {
           <p className="mb-6 opacity-90">
             Access detailed reports on fund utilization and project progress
           </p>
-          <Button variant="secondary" size="lg">
+          <Button 
+            variant="secondary" 
+            size="lg"
+            onClick={handleDownloadAllReports}
+          >
             Download All Reports
           </Button>
         </Card>
