@@ -101,10 +101,18 @@ const UploadInvoice = () => {
       setRiskScore(result.ai_risk.score);
       setRiskLevel(result.ai_risk.level);
       setFraudScore(result.ai_risk.fraud_score);
+      setInvoiceId(result.invoice.id);
+
+      const statusMessage = result.status === "flagged" 
+        ? "⚠ HIGH RISK - Automatically Flagged"
+        : result.status === "pending"
+        ? "✓ Submitted - Pending Admin Review"
+        : "✓ Uploaded Successfully";
 
       toast({
-        title: "Invoice Uploaded Successfully",
-        description: `Risk Level: ${result.ai_risk.level.toUpperCase()}`,
+        title: statusMessage,
+        description: result.message || `Risk Level: ${result.ai_risk.level.toUpperCase()}`,
+        variant: result.status === "flagged" ? "destructive" : "default",
       });
     } catch (error: any) {
       toast({
@@ -130,29 +138,79 @@ const UploadInvoice = () => {
     setAmount("");
   };
 
-  const handleApprove = () => {
-    toast({
-      title: "Invoice Approved",
-      description: "The invoice has been approved and marked for payment processing.",
-    });
-    
-    // Reset form after approval
-    setTimeout(() => {
-      handleClear();
-    }, 1500);
+  const [invoiceId, setInvoiceId] = useState<number | null>(null);
+
+  const handleApprove = async () => {
+    if (!invoiceId) return;
+
+    try {
+      const token = localStorage.getItem("access_token");
+      const response = await fetch(`http://localhost:8000/invoices/verify/${invoiceId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: "approved",
+          notes: "Invoice verified and approved by admin"
+        }),
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Invoice Approved ✓",
+          description: "The invoice has been approved and marked for payment processing.",
+        });
+        
+        setTimeout(() => {
+          handleClear();
+        }, 1500);
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to approve invoice",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleFlag = () => {
-    toast({
-      title: "Invoice Flagged",
-      description: "The invoice has been flagged for manual review by the fraud detection team.",
-      variant: "destructive",
-    });
-    
-    // Reset form after flagging
-    setTimeout(() => {
-      handleClear();
-    }, 1500);
+  const handleFlag = async () => {
+    if (!invoiceId) return;
+
+    try {
+      const token = localStorage.getItem("access_token");
+      const response = await fetch(`http://localhost:8000/invoices/verify/${invoiceId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: "flagged",
+          notes: "Invoice flagged for suspicious activity"
+        }),
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Invoice Flagged ⚠",
+          description: "The invoice has been flagged for manual review by the fraud detection team.",
+          variant: "destructive",
+        });
+        
+        setTimeout(() => {
+          handleClear();
+        }, 1500);
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to flag invoice",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

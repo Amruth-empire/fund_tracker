@@ -97,6 +97,8 @@ def create_invoice(
     db: Session,
     file,
     payload: InvoiceCreate,
+    user_role: str = "contractor",
+    user_id: int = None
 ):
     """Create invoice with OCR verification and fraud detection"""
     file_path = save_invoice_file(file)
@@ -116,10 +118,13 @@ def create_invoice(
     
     if adjusted_risk_score >= 80:
         risk_level = "high"
+        status = "flagged"  # Auto-flag high risk invoices
     elif adjusted_risk_score >= 50:
         risk_level = "medium"
+        status = "pending"
     else:
         risk_level = "low"
+        status = "pending"
 
     invoice = Invoice(
         project_id=payload.project_id,
@@ -129,6 +134,9 @@ def create_invoice(
         risk_score=adjusted_risk_score,
         risk_level=risk_level,
         file_path=file_path,
+        uploaded_by=user_role,
+        status=status,
+        submitted_by_user_id=user_id if user_role == "contractor" else None,
     )
     db.add(invoice)
     db.commit()
@@ -144,7 +152,37 @@ def create_invoice(
             "level": risk_level,
             "base_score": base_risk_score,
             "fraud_score": verification_result["fraud_score"]
-        }
+        },
+        "status": status,
+        "message": f"Invoice submitted successfully. Status: {status.upper()}"
+    }
+
+
+def verify_invoice_by_admin(
+    db: Session,
+    invoice_id: int,
+    action: str,
+    admin_id: int,
+    notes: str = None
+):
+    """Admin verifies/approves/rejects invoice"""
+    from datetime import datetime
+    
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        return {"error": "Invoice not found"}
+    
+    invoice.status = action  # "approved", "rejected", "flagged"
+    invoice.verified_by_user_id = admin_id
+    invoice.verified_at = datetime.utcnow()
+    invoice.admin_notes = notes
+    
+    db.commit()
+    db.refresh(invoice)
+    
+    return {
+        "invoice": invoice,
+        "message": f"Invoice {action} successfully"
     }
 
 
