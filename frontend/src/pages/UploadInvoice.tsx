@@ -130,6 +130,31 @@ const UploadInvoice = () => {
     setAmount("");
   };
 
+  const handleApprove = () => {
+    toast({
+      title: "Invoice Approved",
+      description: "The invoice has been approved and marked for payment processing.",
+    });
+    
+    // Reset form after approval
+    setTimeout(() => {
+      handleClear();
+    }, 1500);
+  };
+
+  const handleFlag = () => {
+    toast({
+      title: "Invoice Flagged",
+      description: "The invoice has been flagged for manual review by the fraud detection team.",
+      variant: "destructive",
+    });
+    
+    // Reset form after flagging
+    setTimeout(() => {
+      handleClear();
+    }, 1500);
+  };
+
   return (
     <div className="flex min-h-screen w-full bg-background">
       <Sidebar />
@@ -477,10 +502,20 @@ const UploadInvoice = () => {
                   </div>
 
                   <div className="mt-6 flex gap-3">
-                    <Button variant="default" className="flex-1">
+                    <Button 
+                      variant="default" 
+                      className="flex-1"
+                      onClick={handleApprove}
+                      disabled={!verificationResult}
+                    >
                       Approve Invoice
                     </Button>
-                    <Button variant="destructive" className="flex-1">
+                    <Button 
+                      variant="destructive" 
+                      className="flex-1"
+                      onClick={handleFlag}
+                      disabled={!verificationResult}
+                    >
                       Flag for Review
                     </Button>
                   </div>

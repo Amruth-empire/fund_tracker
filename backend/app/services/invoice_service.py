@@ -41,24 +41,32 @@ def verify_invoice(filepath: str, user_data):
         "amount_match": False
     }
     
-    # Invoice number comparison
+    # Invoice number comparison - flexible matching
     if fields["invoice_number_ocr"] and user_data.invoice_number:
-        ocr_inv = fields["invoice_number_ocr"].lower().replace(" ", "").replace("-", "")
-        user_inv = user_data.invoice_number.lower().replace(" ", "").replace("-", "")
-        verification["invoice_number_match"] = (ocr_inv == user_inv)
+        ocr_inv = fields["invoice_number_ocr"].lower().replace(" ", "").replace("-", "").replace("/", "")
+        user_inv = user_data.invoice_number.lower().replace(" ", "").replace("-", "").replace("/", "")
+        # Match if OCR contains user input or vice versa
+        verification["invoice_number_match"] = (ocr_inv == user_inv or ocr_inv in user_inv or user_inv in ocr_inv)
     
-    # Vendor name comparison
+    # Vendor name comparison - fuzzy matching
     if fields["vendor_name_ocr"] and user_data.vendor_name:
         ocr_vendor = fields["vendor_name_ocr"].lower().strip()
         user_vendor = user_data.vendor_name.lower().strip()
-        verification["vendor_match"] = (ocr_vendor == user_vendor)
+        # Match if one contains the other or they're equal
+        verification["vendor_match"] = (
+            ocr_vendor == user_vendor or 
+            ocr_vendor in user_vendor or 
+            user_vendor in ocr_vendor or
+            all(word in ocr_vendor for word in user_vendor.split() if len(word) > 2)
+        )
     
-    # Amount comparison
+    # Amount comparison - allow 5% tolerance for OCR errors
     if fields["amount_ocr"] and user_data.amount:
         try:
-            ocr_amount = float(fields["amount_ocr"].replace(",", ""))
+            ocr_amount = float(fields["amount_ocr"].replace(",", "").replace("$", ""))
             user_amount = float(user_data.amount)
-            verification["amount_match"] = (abs(ocr_amount - user_amount) < 1.0)
+            tolerance = user_amount * 0.05  # 5% tolerance
+            verification["amount_match"] = (abs(ocr_amount - user_amount) <= tolerance)
         except:
             verification["amount_match"] = False
     

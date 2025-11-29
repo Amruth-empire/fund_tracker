@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import Sidebar from "@/components/Sidebar";
 import RiskBadge from "@/components/RiskBadge";
@@ -13,10 +13,35 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { AlertTriangle, Filter, Eye } from "lucide-react";
+import { AlertTriangle, Filter, Eye, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+interface Invoice {
+  id: number;
+  invoice_number: string;
+  vendor_name: string;
+  project_id: number;
+  amount: number;
+  risk_score: number;
+  risk_level: string;
+  file_path: string;
+  created_at: string;
+}
 
 const FraudDetection = () => {
+  const { toast } = useToast();
   const [selectedFilter, setSelectedFilter] = useState<string>("all");
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
 
   const fraudCategories = [
     { label: "All Suspicious", value: "all", count: 24 },
