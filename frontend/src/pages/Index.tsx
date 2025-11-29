@@ -125,7 +125,7 @@ const Index = () => {
           <div className="flex items-center gap-2">
             <Shield className="h-8 w-8 text-primary" />
             <span className="text-xl font-heading font-bold">
-              Panchayat Fund Tracker
+              BFTRAS
             </span>
           </div>
           <div className="flex gap-3">
