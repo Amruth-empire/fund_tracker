@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Brain, CheckCircle, AlertTriangle, X, Check, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface VerificationResult {
   invoice_number_match: boolean;
@@ -33,6 +34,7 @@ interface OCRFields {
 
 const UploadInvoice = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   
@@ -215,10 +217,10 @@ const UploadInvoice = () => {
 
   return (
     <div className="flex min-h-screen w-full bg-background">
-      <Sidebar />
+      {user?.role === "admin" && <Sidebar />}
 
       <div className="flex-1">
-        <Navbar isLoggedIn userRole="admin" />
+        <Navbar isLoggedIn userRole={user?.role || "contractor"} />
 
         <main className="p-8">
           <div className="mb-8">

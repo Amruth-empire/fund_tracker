@@ -106,15 +106,22 @@ def create_invoice(
     # Verify invoice using OCR
     verification_result = verify_invoice(file_path, payload)
 
-    # AI Risk Scoring
-    base_risk_score, risk_level = score_invoice(
-        amount=payload.amount,
-        project_id=payload.project_id,
-        vendor_name=payload.vendor_name,
-    )
-
-    # Adjust risk score based on fraud score from verification
-    adjusted_risk_score = min(base_risk_score + verification_result["fraud_score"], 100)
+    # Calculate fraud score (0-100) based on verification mismatches
+    fraud_score = verification_result["fraud_score"]
+    
+    # If all verifications pass, use fraud_score as the base (which will be 0)
+    # Otherwise, add AI risk scoring for additional analysis
+    if fraud_score == 0:
+        # All fields match perfectly - minimal risk
+        adjusted_risk_score = 0
+    else:
+        # Some mismatches detected - combine fraud score with AI analysis
+        base_risk_score, _ = score_invoice(
+            amount=payload.amount,
+            project_id=payload.project_id,
+            vendor_name=payload.vendor_name,
+        )
+        adjusted_risk_score = min(base_risk_score + fraud_score, 100)
     
     if adjusted_risk_score >= 80:
         risk_level = "high"
@@ -150,7 +157,6 @@ def create_invoice(
         "ai_risk": {
             "score": adjusted_risk_score,
             "level": risk_level,
-            "base_score": base_risk_score,
             "fraud_score": verification_result["fraud_score"]
         },
         "status": status,

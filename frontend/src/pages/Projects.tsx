@@ -1,101 +1,122 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import Sidebar from "@/components/Sidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { MapPin, Calendar, IndianRupee, TrendingUp } from "lucide-react";
+import { MapPin, Calendar, IndianRupee, Plus, Loader2 } from "lucide-react";
 
 interface Project {
-  id: string;
+  id: number;
   name: string;
   location: string;
-  budget: string;
+  budget: number;
   utilized: number;
   status: "ongoing" | "completed" | "delayed";
-  startDate: string;
-  endDate: string;
-  description: string;
 }
 
 const Projects = () => {
+  const { toast } = useToast();
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  
+  // Form state
+  const [projectName, setProjectName] = useState("");
+  const [projectLocation, setProjectLocation] = useState("");
+  const [projectBudget, setProjectBudget] = useState("");
 
-  const projects: Project[] = [
-    {
-      id: "PRJ-001",
-      name: "Rural Road Development",
-      location: "Gram Panchayat - Rampur",
-      budget: "₹45,00,000",
-      utilized: 72,
-      status: "ongoing",
-      startDate: "2024-01-01",
-      endDate: "2024-06-30",
-      description: "Construction of 5km rural road connecting 3 villages",
-    },
-    {
-      id: "PRJ-002",
-      name: "Primary School Building",
-      location: "Gram Panchayat - Shivnagar",
-      budget: "₹32,00,000",
-      utilized: 45,
-      status: "ongoing",
-      startDate: "2024-02-01",
-      endDate: "2024-08-31",
-      description: "New 6-classroom school building with facilities",
-    },
-    {
-      id: "PRJ-003",
-      name: "Water Supply Pipeline",
-      location: "Gram Panchayat - Madhubani",
-      budget: "₹28,00,000",
-      utilized: 100,
-      status: "completed",
-      startDate: "2023-10-01",
-      endDate: "2024-01-15",
-      description: "Underground water pipeline for 500 households",
-    },
-    {
-      id: "PRJ-004",
-      name: "Community Health Center",
-      location: "Gram Panchayat - Patelnagar",
-      budget: "₹55,00,000",
-      utilized: 38,
-      status: "delayed",
-      startDate: "2023-12-01",
-      endDate: "2024-07-31",
-      description: "Multi-specialty health center with 24/7 facilities",
-    },
-    {
-      id: "PRJ-005",
-      name: "Solar Street Lighting",
-      location: "Gram Panchayat - Greenfield",
-      budget: "₹18,00,000",
-      utilized: 89,
-      status: "ongoing",
-      startDate: "2024-01-15",
-      endDate: "2024-04-30",
-      description: "Installation of 200 solar street lights",
-    },
-    {
-      id: "PRJ-006",
-      name: "Drainage System Upgrade",
-      location: "Gram Panchayat - Laxmipur",
-      budget: "₹38,00,000",
-      utilized: 100,
-      status: "completed",
-      startDate: "2023-09-01",
-      endDate: "2023-12-31",
-      description: "Modern drainage system covering entire panchayat area",
-    },
-  ];
+  // Fetch projects from backend
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
+  const fetchProjects = async () => {
+    try {
+      const token = localStorage.getItem("access_token");
+      const response = await fetch("http://localhost:8000/projects/", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setProjects(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch projects:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateProject = async () => {
+    if (!projectName || !projectLocation || !projectBudget) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill all fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsCreating(true);
+
+    try {
+      const token = localStorage.getItem("access_token");
+      const response = await fetch("http://localhost:8000/projects/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: projectName,
+          location: projectLocation,
+          budget: parseFloat(projectBudget),
+        }),
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Project created successfully",
+        });
+        
+        // Reset form
+        setProjectName("");
+        setProjectLocation("");
+        setProjectBudget("");
+        setShowCreateForm(false);
+        
+        // Refresh projects list
+        fetchProjects();
+      } else {
+        throw new Error("Failed to create project");
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create project",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -118,16 +139,91 @@ const Projects = () => {
         <Navbar isLoggedIn userRole="admin" />
 
         <main className="p-8">
-          <div className="mb-8">
-            <h1 className="mb-2 text-3xl font-heading font-bold">Projects</h1>
-            <p className="text-muted-foreground">
-              Monitor all ongoing and completed development projects
-            </p>
+          <div className="mb-8 flex items-center justify-between">
+            <div>
+              <h1 className="mb-2 text-3xl font-heading font-bold">Projects</h1>
+              <p className="text-muted-foreground">
+                Monitor all ongoing and completed development projects
+              </p>
+            </div>
+            <Button onClick={() => setShowCreateForm(true)} size="lg">
+              <Plus className="mr-2 h-4 w-4" />
+              Create Project
+            </Button>
           </div>
 
+          {/* Create Project Form */}
+          {showCreateForm && (
+            <Card className="mb-6 p-6">
+              <h3 className="mb-4 text-lg font-heading font-semibold">
+                Create New Project
+              </h3>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div>
+                  <Label>Project Name</Label>
+                  <Input
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                    placeholder="Rural Road Development"
+                  />
+                </div>
+                <div>
+                  <Label>Location</Label>
+                  <Input
+                    value={projectLocation}
+                    onChange={(e) => setProjectLocation(e.target.value)}
+                    placeholder="Gram Panchayat - Village Name"
+                  />
+                </div>
+                <div>
+                  <Label>Budget (₹)</Label>
+                  <Input
+                    type="number"
+                    value={projectBudget}
+                    onChange={(e) => setProjectBudget(e.target.value)}
+                    placeholder="4500000"
+                  />
+                </div>
+              </div>
+              <div className="mt-4 flex gap-3">
+                <Button onClick={handleCreateProject} disabled={isCreating}>
+                  {isCreating ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    "Create Project"
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowCreateForm(false);
+                    setProjectName("");
+                    setProjectLocation("");
+                    setProjectBudget("");
+                  }}
+                  disabled={isCreating}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </Card>
+          )}
+
           {/* Projects Grid */}
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {projects.map((project) => (
+          {isLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : projects.length === 0 ? (
+            <Card className="p-12 text-center">
+              <p className="text-muted-foreground">No projects found. Create your first project!</p>
+            </Card>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {projects.map((project) => (
               <Card key={project.id} className="p-6 hover-lift">
                 <div className="mb-4 flex items-start justify-between">
                   <h3 className="font-heading font-semibold leading-tight">
@@ -145,11 +241,7 @@ const Projects = () => {
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <IndianRupee className="h-4 w-4" />
-                    Budget: {project.budget}
-                  </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Calendar className="h-4 w-4" />
-                    {project.startDate} to {project.endDate}
+                    Budget: ₹{project.budget.toLocaleString('en-IN')}
                   </div>
                 </div>
 
@@ -169,8 +261,9 @@ const Projects = () => {
                   View Details
                 </Button>
               </Card>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </main>
       </div>
 
@@ -206,7 +299,7 @@ const Projects = () => {
                 <div>
                   <p className="mb-1 text-sm text-muted-foreground">Total Budget</p>
                   <p className="text-lg font-heading font-bold">
-                    {selectedProject.budget}
+                    ₹{selectedProject.budget.toLocaleString('en-IN')}
                   </p>
                 </div>
                 <div>
@@ -215,21 +308,6 @@ const Projects = () => {
                     {selectedProject.utilized}%
                   </p>
                 </div>
-              </div>
-
-              <div>
-                <p className="mb-2 text-sm text-muted-foreground">Project Timeline</p>
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">
-                    {selectedProject.startDate} to {selectedProject.endDate}
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <p className="mb-2 text-sm text-muted-foreground">Description</p>
-                <p className="text-sm">{selectedProject.description}</p>
               </div>
 
               <div>

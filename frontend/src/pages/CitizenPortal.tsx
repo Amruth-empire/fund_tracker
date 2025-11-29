@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import {
   Shield,
   Download,
   CheckCircle,
+  Loader2,
 } from "lucide-react";
 import {
   BarChart,
@@ -25,9 +26,21 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
+interface Project {
+  id: number;
+  name: string;
+  location: string;
+  budget: number;
+  utilized: number;
+  status: string;
+}
+
 const CitizenPortal = () => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredProjects, setFilteredProjects] = useState<typeof projects>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
   const projectData = [
     { month: "Jan", allocated: 40, utilized: 35 },
     { month: "Feb", allocated: 45, utilized: 38 },
@@ -37,35 +50,24 @@ const CitizenPortal = () => {
     { month: "Jun", allocated: 52, utilized: 50 },
   ];
 
-  const projects = [
-    {
-      name: "Rural Road Development",
-      location: "Gram Panchayat - Rampur",
-      allocated: "₹45,00,000",
-      utilized: "₹32,40,000",
-      progress: 72,
-      status: "Ongoing",
-      aiVerified: true,
-    },
-    {
-      name: "Primary School Building",
-      location: "Gram Panchayat - Shivnagar",
-      allocated: "₹32,00,000",
-      utilized: "₹14,40,000",
-      progress: 45,
-      status: "Ongoing",
-      aiVerified: true,
-    },
-    {
-      name: "Water Supply Pipeline",
-      location: "Gram Panchayat - Madhubani",
-      allocated: "₹28,00,000",
-      utilized: "₹28,00,000",
-      progress: 100,
-      status: "Completed",
-      aiVerified: true,
-    },
-  ];
+  // Fetch projects from backend
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const response = await fetch("http://localhost:8000/projects/");
+        if (response.ok) {
+          const data = await response.json();
+          setProjects(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch projects:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProjects();
+  }, []);
 
   const handleSearch = () => {
     if (!searchQuery.trim()) {
@@ -260,71 +262,84 @@ const CitizenPortal = () => {
               </Button>
             )}
           </div>
-          <div className="space-y-6">
-            {displayProjects.map((project, index) => (
-              <Card key={index} className="p-6 hover-lift">
-                <div className="mb-4 flex items-start justify-between">
-                  <div>
-                    <h3 className="mb-1 text-xl font-heading font-semibold">
-                      {project.name}
-                    </h3>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <MapPin className="h-4 w-4" />
-                      {project.location}
+          
+          {isLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : displayProjects.length === 0 ? (
+            <Card className="p-12 text-center">
+              <p className="text-muted-foreground">
+                {searchQuery ? `No projects found matching "${searchQuery}"` : "No projects available"}
+              </p>
+            </Card>
+          ) : (
+            <div className="space-y-6">
+              {displayProjects.map((project) => (
+                <Card key={project.id} className="p-6 hover-lift">
+                  <div className="mb-4 flex items-start justify-between">
+                    <div>
+                      <h3 className="mb-1 text-xl font-heading font-semibold">
+                        {project.name}
+                      </h3>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <MapPin className="h-4 w-4" />
+                        {project.location}
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Badge
-                      className={
-                        project.status === "Completed"
-                          ? "bg-success-light text-success"
-                          : "bg-primary/10 text-primary"
-                      }
-                    >
-                      {project.status}
-                    </Badge>
-                    {project.aiVerified && (
+                    <div className="flex gap-2">
+                      <Badge
+                        className={
+                          project.status === "completed"
+                            ? "bg-success-light text-success"
+                            : project.status === "ongoing"
+                            ? "bg-primary/10 text-primary"
+                            : "bg-danger-light text-danger"
+                        }
+                      >
+                        {project.status}
+                      </Badge>
                       <Badge className="bg-accent/10 text-accent">
                         <Shield className="mr-1 h-3 w-3" />
                         AI Verified
                       </Badge>
-                    )}
+                    </div>
                   </div>
-                </div>
 
-                <div className="mb-4 grid gap-4 md:grid-cols-3">
-                  <div>
-                    <p className="mb-1 text-sm text-muted-foreground">
-                      Funds Allocated
-                    </p>
-                    <p className="text-lg font-heading font-bold">
-                      {project.allocated}
-                    </p>
+                  <div className="mb-4 grid gap-4 md:grid-cols-3">
+                    <div>
+                      <p className="mb-1 text-sm text-muted-foreground">
+                        Funds Allocated
+                      </p>
+                      <p className="text-lg font-heading font-bold">
+                        ₹{project.budget.toLocaleString('en-IN')}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="mb-1 text-sm text-muted-foreground">
+                        Funds Utilized
+                      </p>
+                      <p className="text-lg font-heading font-bold text-success">
+                        ₹{((project.budget * project.utilized) / 100).toLocaleString('en-IN')}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="mb-1 text-sm text-muted-foreground">
+                        Progress
+                      </p>
+                      <p className="text-lg font-heading font-bold">
+                        {project.utilized}%
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="mb-1 text-sm text-muted-foreground">
-                      Funds Utilized
-                    </p>
-                    <p className="text-lg font-heading font-bold text-success">
-                      {project.utilized}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="mb-1 text-sm text-muted-foreground">
-                      Progress
-                    </p>
-                    <p className="text-lg font-heading font-bold">
-                      {project.progress}%
-                    </p>
-                  </div>
-                </div>
 
-                <div>
-                  <Progress value={project.progress} className="h-2" />
-                </div>
-              </Card>
-            ))}
-          </div>
+                  <div>
+                    <Progress value={project.utilized} className="h-2" />
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Download Section */}

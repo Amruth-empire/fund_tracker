@@ -38,7 +38,7 @@ def extract_key_fields(img):
     keywords = {
         "invoice": ["Invoice #", "Invoice", "INV", "Invoice Number"],
         "vendor": ["Your Company LLC", "Company", "Vendor"],
-        "amount": ["Amount Due", "Grand Total", "Total", "Amount"]
+        "amount": ["Amount Due", "Grand Total", "Total Amount", "Total", "Amount"]
     }
     
     results = {
@@ -64,35 +64,64 @@ def extract_key_fields(img):
                     keyword_top = ocr_data[i]['top']
                     
                     # Find text to the right of keyword
-                    closest_value = ""
-                    min_distance = float('inf')
-                    
-                    for candidate in ocr_data:
-                        vertical_distance = abs(candidate['top'] - keyword_top)
-                        horizontal_distance = candidate['left'] - keyword_left
-                        
-                        if vertical_distance < 15 and horizontal_distance > 0 and horizontal_distance < 300:
-                            # Skip "NO" if looking for invoice number
-                            if key_type == "invoice" and candidate['text'].upper() == "NO":
-                                continue
+                    # For amounts, collect all consecutive numbers on the same line
+                    if key_type == "amount":
+                        candidates_on_line = []
+                        for candidate in ocr_data:
+                            vertical_distance = abs(candidate['top'] - keyword_top)
+                            horizontal_distance = candidate['left'] - keyword_left
                             
-                            if horizontal_distance < min_distance:
-                                min_distance = horizontal_distance
-                                closest_value = candidate['text']
-                    
-                    if closest_value:
-                        # Clean based on type
-                        if key_type == "invoice":
-                            # Only keep if it has digits
-                            if re.search(r'\d', closest_value):
-                                closest_value = re.sub(r'[^\w\-\/]', '', closest_value)
-                            else:
-                                closest_value = ""
-                        elif key_type == "amount":
-                            closest_value = re.sub(r'[^\d,\.]', '', closest_value).replace(',', '')
+                            if vertical_distance < 15 and horizontal_distance > 0 and horizontal_distance < 400:
+                                # Check if it contains numbers
+                                if re.search(r'\d', candidate['text']):
+                                    candidates_on_line.append((candidate['left'], candidate['text']))
+                        
+                        if candidates_on_line:
+                            # Sort by position and concatenate all numbers
+                            candidates_on_line.sort(key=lambda x: x[0])
+                            amount_parts = []
+                            for _, text in candidates_on_line:
+                                cleaned = re.sub(r'[^\d]', '', text)
+                                if cleaned:
+                                    amount_parts.append(cleaned)
+                            
+                            if amount_parts:
+                                # Join all parts to form complete amount (e.g., "4" + "800" = "4800")
+                                full_amount = ''.join(amount_parts)
+                                try:
+                                    if int(full_amount) >= 100:
+                                        return full_amount
+                                except:
+                                    pass
+                    else:
+                        # For invoice and vendor, find closest single value
+                        closest_value = ""
+                        min_distance = float('inf')
+                        
+                        for candidate in ocr_data:
+                            vertical_distance = abs(candidate['top'] - keyword_top)
+                            horizontal_distance = candidate['left'] - keyword_left
+                            
+                            if vertical_distance < 15 and horizontal_distance > 0 and horizontal_distance < 300:
+                                # Skip "NO" if looking for invoice number
+                                if key_type == "invoice" and candidate['text'].upper() == "NO":
+                                    continue
+                                
+                                if horizontal_distance < min_distance:
+                                    min_distance = horizontal_distance
+                                    closest_value = candidate['text']
                         
                         if closest_value:
-                            return closest_value
+                            # Clean based on type
+                            if key_type == "invoice":
+                                # Only keep if it has digits
+                                if re.search(r'\d', closest_value):
+                                    closest_value = re.sub(r'[^\w\-\/]', '', closest_value)
+                                else:
+                                    closest_value = ""
+                            
+                            if closest_value:
+                                return closest_value
         
         return ""
     
@@ -144,22 +173,24 @@ def extract_key_fields(img):
     if not results["amount_ocr"] or results["amount_ocr"] == "":
         # Try multiple patterns for total/subtotal amount
         patterns = [
-            r'total\s*[:.\-]?\s*(?:rs\.?|₹)?\s*([0-9,\.]+)',  # Total: Rs. 2,800.00
-            r'sub\s*total\s*[:.\-]?\s*(?:rs\.?|₹)?\s*([0-9,\.]+)',  # Subtotal: Rs. 2,500.00
-            r'grand\s*total\s*[:.\-]?\s*(?:rs\.?|₹)?\s*([0-9,\.]+)',  # Grand Total
-            r'amount\s*[:.\-]?\s*(?:rs\.?|₹|\$)?\s*([0-9,\.]+)',  # Amount: 4800
-            r'(?:rs\.?|₹)\s*([0-9,\.]{4,})',  # Rs. 2,800.00 or ₹2800
-            r'\$\s*([0-9,\.]{4,})',  # $4800
+            r'grand\s*total\s*[:.\-]?\s*(?:rs\.?|₹|\$)?\s*([0-9,\.]+)',  # Grand Total first (highest priority)
+            r'total\s*amount\s*[:.\-]?\s*(?:rs\.?|₹|\$)?\s*([0-9,\.]+)',  # Total Amount
+            r'amount\s*due\s*[:.\-]?\s*(?:rs\.?|₹|\$)?\s*([0-9,\.]+)',  # Amount Due
+            r'total\s*[:.\-]?\s*(?:rs\.?|₹|\$)?\s*([0-9,\.\s]+)',  # Total: Rs. 2,800.00 or Total: 4 800
+            r'sub\s*total\s*[:.\-]?\s*(?:rs\.?|₹|\$)?\s*([0-9,\.]+)',  # Subtotal
+            r'amount\s*[:.\-]?\s*(?:rs\.?|₹|\$)?\s*([0-9,\.\s]+)',  # Amount: 4800 or Amount: 4 800
+            r'(?:rs\.?|₹)\s*([0-9,\.\s]{4,})',  # Rs. 4 800 or ₹4800
+            r'\$\s*([0-9,\.\s]{4,})',  # $4800 or $ 4 800
         ]
         for pattern in patterns:
             match = re.search(pattern, full_text, re.IGNORECASE)
             if match:
-                amount_str = match.group(1).replace(',', '').replace(' ', '')
+                amount_str = match.group(1).replace(',', '').replace(' ', '').replace('.00', '')
                 # Only accept if it's a reasonable amount (more than 100)
                 try:
                     amount_val = float(amount_str)
                     if amount_val >= 100:
-                        results["amount_ocr"] = amount_str.split('.')[0]  # Get integer part
+                        results["amount_ocr"] = str(int(amount_val))  # Get integer value
                         break
                 except:
                     continue
