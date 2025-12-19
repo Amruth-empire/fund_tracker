@@ -8,13 +8,25 @@ import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { MapPin, Calendar, IndianRupee, Plus, Loader2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { MapPin, Calendar, IndianRupee, Plus, Loader2, Trash2 } from "lucide-react";
 
 interface Project {
   id: number;
@@ -32,6 +44,8 @@ const Projects = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // Form state
   const [projectName, setProjectName] = useState("");
@@ -46,7 +60,7 @@ const Projects = () => {
   const fetchProjects = async () => {
     try {
       const token = localStorage.getItem("access_token");
-      const response = await fetch("http://localhost:8000/projects/", {
+      const response = await fetch(`${API_BASE_URL}/projects/`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -77,7 +91,7 @@ const Projects = () => {
 
     try {
       const token = localStorage.getItem("access_token");
-      const response = await fetch("http://localhost:8000/projects/", {
+      const response = await fetch(`${API_BASE_URL}/projects/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -105,16 +119,55 @@ const Projects = () => {
         // Refresh projects list
         fetchProjects();
       } else {
-        throw new Error("Failed to create project");
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Server error:', errorData);
+        throw new Error(errorData.detail || "Failed to create project");
       }
     } catch (error) {
+      console.error('Failed to create project:', error);
       toast({
         title: "Error",
-        description: "Failed to create project",
+        description: error instanceof Error ? error.message : "Failed to create project",
         variant: "destructive",
       });
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    if (!projectToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const token = localStorage.getItem("access_token");
+      const response = await fetch(`${API_BASE_URL}/projects/${projectToDelete.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Project deleted successfully",
+        });
+        setProjectToDelete(null);
+        fetchProjects();
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || "Failed to delete project");
+      }
+    } catch (error) {
+      console.error('Failed to delete project:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete project",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -253,13 +306,22 @@ const Projects = () => {
                   <Progress value={project.utilized} className="h-2" />
                 </div>
 
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => setSelectedProject(project)}
-                >
-                  View Details
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setSelectedProject(project)}
+                  >
+                    View Details
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    onClick={() => setProjectToDelete(project)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </Card>
               ))}
             </div>
@@ -335,6 +397,36 @@ const Projects = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!projectToDelete} onOpenChange={() => setProjectToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the project <strong>"{projectToDelete?.name}"</strong>.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteProject}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete Project"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
