@@ -5,9 +5,9 @@ import re
 import platform
 import os
 
-# Set tesseract path based on OS
+# Set tesseract path based on OS and environment
 if platform.system() == "Windows":
-    # Try multiple common Tesseract installation paths
+    # Try multiple common Tesseract installation paths for Windows
     possible_paths = [
         r"C:\Program Files\Tesseract-OCR\tesseract.exe",
         r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
@@ -18,6 +18,30 @@ if platform.system() == "Windows":
         if os.path.exists(path):
             pytesseract.pytesseract.tesseract_cmd = path
             break
+else:
+    # For Linux/Unix (Production on Render)
+    # Check if tesseract is in PATH or set explicit path
+    tesseract_cmd = os.getenv('TESSERACT_CMD', 'tesseract')
+    
+    # Try to find tesseract
+    import shutil
+    tesseract_path = shutil.which(tesseract_cmd)
+    
+    if tesseract_path:
+        pytesseract.pytesseract.tesseract_cmd = tesseract_path
+        print(f"✅ Tesseract found at: {tesseract_path}")
+    else:
+        # Try common Linux paths
+        linux_paths = [
+            '/usr/bin/tesseract',
+            '/usr/local/bin/tesseract',
+            '/app/.apt/usr/bin/tesseract',  # Render specific
+        ]
+        for path in linux_paths:
+            if os.path.exists(path):
+                pytesseract.pytesseract.tesseract_cmd = path
+                print(f"✅ Tesseract found at: {path}")
+                break
 
 # ------------------------------
 # Extract Key Fields
