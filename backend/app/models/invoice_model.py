@@ -14,6 +14,8 @@ class Invoice(Base):
     amount = Column(Numeric, nullable=False)
     risk_score = Column(Integer, default=0)  # 0-100
     risk_level = Column(String, default="low")  # low, medium, high
+    fraud_category = Column(String, nullable=True)  # duplicate, overbilling, vendor_mismatch, amount_mismatch, invoice_mismatch
+    amount_mismatch_percentage = Column(Numeric, nullable=True)  # Percentage of amount mismatch
     file_path = Column(String, nullable=False)
     
     # New fields for contractor-admin workflow

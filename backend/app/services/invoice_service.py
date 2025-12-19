@@ -66,30 +66,78 @@ def verify_invoice(filepath: str, user_data):
             all(word in ocr_vendor for word in user_vendor.split() if len(word) > 2)
         )
     
-    # Amount comparison - allow 5% tolerance for OCR errors
+    # Amount comparison - calculate mismatch percentage
+    amount_mismatch_pct = 0
     if fields["amount_ocr"] and user_data.amount:
         try:
-            ocr_amount = float(fields["amount_ocr"].replace(",", "").replace("$", ""))
+            ocr_amount = float(fields["amount_ocr"].replace(",", "").replace("$", "").strip())
             user_amount = float(user_data.amount)
-            tolerance = user_amount * 0.05  # 5% tolerance
-            verification["amount_match"] = (abs(ocr_amount - user_amount) <= tolerance)
+            
+            # Calculate percentage difference (before applying tolerance)
+            if ocr_amount > 0:
+                amount_mismatch_pct = abs((user_amount - ocr_amount) / ocr_amount * 100)
+            
+            # Allow 5% tolerance for OCR errors
+            tolerance = max(ocr_amount * 0.05, 1)  # At least 1 rupee tolerance
+            
+            # If amounts match within tolerance, consider it a match and reset mismatch percentage
+            if abs(ocr_amount - user_amount) <= tolerance:
+                verification["amount_match"] = True
+                amount_mismatch_pct = 0  # Reset to 0 if within tolerance
+            else:
+                verification["amount_match"] = False
         except:
             verification["amount_match"] = False
+            amount_mismatch_pct = 0
     
-    # Calculate fraud score based on mismatches
+    # Calculate fraud score based on mismatches with dynamic scoring
     fraud_score = 0
+    fraud_category = None
+    
+    # Prioritize categories by severity
+    if not verification["amount_match"] and amount_mismatch_pct > 0:
+        # Dynamic scoring based on amount mismatch percentage
+        if amount_mismatch_pct > 50:
+            # Very high mismatch: 50-100% difference
+            fraud_score += int(min(60 + (amount_mismatch_pct - 50), 70))  # 60-70 points
+            fraud_category = "overbilling"
+        elif amount_mismatch_pct > 30:
+            # High mismatch: 30-50% difference
+            fraud_score += int(50 + (amount_mismatch_pct - 30) * 0.5)  # 50-60 points
+            fraud_category = "overbilling"
+        elif amount_mismatch_pct > 15:
+            # Medium mismatch: 15-30% difference
+            fraud_score += int(35 + (amount_mismatch_pct - 15) * 1)  # 35-50 points
+            fraud_category = "amount_mismatch"
+        elif amount_mismatch_pct > 5:
+            # Low mismatch: 5-15% difference
+            fraud_score += int(20 + (amount_mismatch_pct - 5) * 1.5)  # 20-35 points
+            fraud_category = "amount_mismatch"
+        else:
+            # Very low mismatch: 0-5% (OCR tolerance exceeded slightly)
+            fraud_score += 15
+            fraud_category = "amount_mismatch"
+    
     if not verification["invoice_number_match"]:
-        fraud_score += 40
+        if not fraud_category:
+            fraud_category = "invoice_mismatch"
+        fraud_score += 25
+    
     if not verification["vendor_match"]:
-        fraud_score += 30
-    if not verification["amount_match"]:
-        fraud_score += 30
+        if not fraud_category:
+            fraud_category = "vendor_mismatch"
+        fraud_score += 20
+    
+    # Check for duplicate invoice (this would need database query in create_invoice)
+    # fraud_category could be set to "duplicate" if found
     
     return {
         "ocr_fields": fields,
         "ocr_table": table,
         "verification": verification,
-        "fraud_score": fraud_score
+        "fraud_score": int(min(fraud_score, 100)),  # Cap at 100 and ensure integer
+        "fraud_category": fraud_category,
+        "amount_mismatch_percentage": round(amount_mismatch_pct, 2)
     }
 
 
@@ -106,6 +154,19 @@ def create_invoice(
     # Verify invoice using OCR
     verification_result = verify_invoice(file_path, payload)
 
+    # Check for duplicate invoice (only if submitted by contractor, not during testing/admin upload)
+    fraud_category = verification_result["fraud_category"]
+    if user_role == "contractor":
+        existing_invoice = db.query(Invoice).filter(
+            Invoice.invoice_number == payload.invoice_number,
+            Invoice.vendor_name == payload.vendor_name,
+            Invoice.status.in_(["approved", "pending"])  # Don't count rejected/flagged as duplicates
+        ).first()
+        
+        if existing_invoice:
+            fraud_category = "duplicate"
+            verification_result["fraud_score"] = min(verification_result["fraud_score"] + 40, 100)
+
     # Calculate fraud score (0-100) based on verification mismatches
     fraud_score = verification_result["fraud_score"]
     
@@ -121,7 +182,7 @@ def create_invoice(
             project_id=payload.project_id,
             vendor_name=payload.vendor_name,
         )
-        adjusted_risk_score = min(base_risk_score + fraud_score, 100)
+        adjusted_risk_score = int(min(base_risk_score + fraud_score, 100))
     
     if adjusted_risk_score >= 80:
         risk_level = "high"
@@ -140,6 +201,8 @@ def create_invoice(
         amount=payload.amount,
         risk_score=adjusted_risk_score,
         risk_level=risk_level,
+        fraud_category=fraud_category,
+        amount_mismatch_percentage=verification_result["amount_mismatch_percentage"],
         file_path=file_path,
         uploaded_by=user_role,
         status=status,
@@ -157,7 +220,9 @@ def create_invoice(
         "ai_risk": {
             "score": adjusted_risk_score,
             "level": risk_level,
-            "fraud_score": verification_result["fraud_score"]
+            "fraud_score": verification_result["fraud_score"],
+            "fraud_category": fraud_category,
+            "amount_mismatch_percentage": verification_result["amount_mismatch_percentage"]
         },
         "status": status,
         "message": f"Invoice submitted successfully. Status: {status.upper()}"

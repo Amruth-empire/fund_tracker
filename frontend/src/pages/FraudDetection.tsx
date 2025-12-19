@@ -32,6 +32,8 @@ interface Invoice {
   amount: number;
   risk_score: number;
   risk_level: string;
+  fraud_category: string | null;
+  amount_mismatch_percentage: number | null;
   file_path: string;
   created_at: string;
 }
@@ -40,23 +42,47 @@ const FraudDetection = () => {
   const { toast } = useToast();
   const [selectedFilter, setSelectedFilter] = useState<string>("all");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [allInvoices, setAllInvoices] = useState<Invoice[]>([]); // Store all invoices for counting
   const [loading, setLoading] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
 
   const fraudCategories = [
-    { label: "All Suspicious", value: "all", count: invoices.length },
-    { label: "Duplicate Invoice", value: "duplicate", count: invoices.filter(i => i.risk_score >= 80).length },
-    { label: "Overbilling", value: "overbilling", count: invoices.filter(i => i.risk_score >= 70 && i.risk_score < 80).length },
-    { label: "Suspicious Vendor", value: "vendor", count: invoices.filter(i => i.risk_score >= 60 && i.risk_score < 70).length },
-    { label: "Invalid Amount", value: "amount", count: invoices.filter(i => i.risk_score >= 50 && i.risk_score < 60).length },
-    { label: "Material Mismatch", value: "material", count: invoices.filter(i => i.risk_score >= 40 && i.risk_score < 50).length },
+    { label: "All Suspicious", value: "all", count: allInvoices.length },
+    { label: "Duplicate Invoice", value: "duplicate", count: allInvoices.filter(i => i.fraud_category === "duplicate").length },
+    { label: "Overbilling", value: "overbilling", count: allInvoices.filter(i => i.fraud_category === "overbilling").length },
+    { label: "Suspicious Vendor", value: "vendor", count: allInvoices.filter(i => i.fraud_category === "vendor_mismatch").length },
+    { label: "Invalid Amount", value: "amount", count: allInvoices.filter(i => i.fraud_category === "amount_mismatch").length },
+    { label: "Invoice Mismatch", value: "invoice", count: allInvoices.filter(i => i.fraud_category === "invoice_mismatch").length },
   ];
 
-  // Fetch invoices from backend
+  // Fetch all invoices for counts on mount
+  useEffect(() => {
+    fetchAllInvoices();
+  }, []);
+
+  // Fetch filtered invoices when filter changes
   useEffect(() => {
     fetchInvoices();
   }, [selectedFilter]);
+
+  const fetchAllInvoices = async () => {
+    try {
+      const token = localStorage.getItem("access_token");
+      const response = await fetch("http://localhost:8000/fraud/high-risk?min_risk=40", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAllInvoices(data);
+      }
+    } catch (error) {
+      console.error("Error fetching all invoices:", error);
+    }
+  };
 
   const fetchInvoices = async () => {
     setLoading(true);
@@ -75,6 +101,10 @@ const FraudDetection = () => {
       if (response.ok) {
         const data = await response.json();
         setInvoices(data);
+        // Also update allInvoices when fetching "all" to keep counts fresh
+        if (selectedFilter === "all") {
+          setAllInvoices(data);
+        }
       }
     } catch (error) {
       console.error("Error fetching invoices:", error);
@@ -105,6 +135,7 @@ const FraudDetection = () => {
           variant: "destructive",
         });
         fetchInvoices(); // Refresh the list
+        fetchAllInvoices(); // Refresh counts
       }
     } catch (error) {
       toast({
@@ -115,12 +146,23 @@ const FraudDetection = () => {
     }
   };
 
-  const getCategoryByScore = (score: number) => {
-    if (score >= 80) return "Duplicate Invoice";
-    if (score >= 70) return "Overbilling";
-    if (score >= 60) return "Suspicious Vendor";
-    if (score >= 50) return "Invalid Amount";
-    return "Material Mismatch";
+  const getCategoryLabel = (category: string | null, score: number) => {
+    if (!category) {
+      // Fallback to score-based categorization
+      if (score >= 80) return "High Risk";
+      if (score >= 50) return "Medium Risk";
+      return "Low Risk";
+    }
+    
+    const categoryLabels: { [key: string]: string } = {
+      duplicate: "Duplicate Invoice",
+      overbilling: "Overbilling",
+      vendor_mismatch: "Suspicious Vendor",
+      amount_mismatch: "Amount Mismatch",
+      invoice_mismatch: "Invoice Mismatch",
+    };
+    
+    return categoryLabels[category] || "Unknown";
   };
 
   const getStatusByScore = (score: number) => {
@@ -268,7 +310,14 @@ const FraudDetection = () => {
                         <RiskBadge score={invoice.risk_score} size="sm" />
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{getCategoryByScore(invoice.risk_score)}</Badge>
+                        <Badge variant="outline">
+                          {getCategoryLabel(invoice.fraud_category, invoice.risk_score)}
+                          {invoice.amount_mismatch_percentage !== null && invoice.amount_mismatch_percentage > 0 && (
+                            <span className="ml-1 text-xs">
+                              ({invoice.amount_mismatch_percentage.toFixed(1)}% off)
+                            </span>
+                          )}
+                        </Badge>
                       </TableCell>
                       <TableCell className="font-medium">₹{invoice.amount.toLocaleString()}</TableCell>
                       <TableCell className="text-muted-foreground">
@@ -341,10 +390,17 @@ const FraudDetection = () => {
                       <p>{new Date(selectedInvoice.created_at).toLocaleString()}</p>
                     </div>
                     <div className="col-span-2">
-                      <Label className="text-sm text-muted-foreground">Category</Label>
-                      <Badge variant="outline" className="mt-1">
-                        {getCategoryByScore(selectedInvoice.risk_score)}
-                      </Badge>
+                      <Label className="text-sm text-muted-foreground">Fraud Category</Label>
+                      <div className="mt-1">
+                        <Badge variant="outline">
+                          {getCategoryLabel(selectedInvoice.fraud_category, selectedInvoice.risk_score)}
+                        </Badge>
+                        {selectedInvoice.amount_mismatch_percentage !== null && selectedInvoice.amount_mismatch_percentage > 0 && (
+                          <p className="mt-2 text-sm text-danger">
+                            Amount Mismatch: {selectedInvoice.amount_mismatch_percentage.toFixed(2)}%
+                          </p>
+                        )}
+                      </div>
                     </div>
                     <div className="col-span-2">
                       <Label className="text-sm text-muted-foreground">File Path</Label>

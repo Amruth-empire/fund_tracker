@@ -40,24 +40,37 @@ def filter_invoices(
     category: Optional[str] = None,
     risk_level: Optional[str] = None
 ):
-    """Filter invoices by category or risk level"""
+    """Filter invoices by fraud category or risk level
+    
+    Categories:
+    - duplicate: Duplicate invoices (risk >= 80)
+    - overbilling: Amount mismatch > 30% (risk >= 70)
+    - amount_mismatch: Amount mismatch 5-30% (risk >= 50)
+    - vendor_mismatch: Vendor name doesn't match
+    - invoice_mismatch: Invoice number doesn't match
+    """
     query = db.query(Invoice)
     
     if risk_level:
         query = query.filter(Invoice.risk_level == risk_level)
     
     if category:
-        # Filter by risk score ranges for categories
+        # Filter by fraud_category field for accurate categorization
         if category == "duplicate":
-            query = query.filter(Invoice.risk_score >= 80)
+            query = query.filter(Invoice.fraud_category == "duplicate")
         elif category == "overbilling":
-            query = query.filter(Invoice.risk_score >= 70, Invoice.risk_score < 80)
-        elif category == "vendor":
-            query = query.filter(Invoice.risk_score >= 60, Invoice.risk_score < 70)
+            query = query.filter(Invoice.fraud_category == "overbilling")
         elif category == "amount":
-            query = query.filter(Invoice.risk_score >= 50, Invoice.risk_score < 60)
+            query = query.filter(Invoice.fraud_category == "amount_mismatch")
+        elif category == "vendor":
+            query = query.filter(Invoice.fraud_category == "vendor_mismatch")
+        elif category == "invoice":
+            query = query.filter(Invoice.fraud_category == "invoice_mismatch")
+        elif category == "all":
+            # Return all suspicious invoices (risk >= 50)
+            query = query.filter(Invoice.risk_score >= 50)
     
-    return query.all()
+    return query.order_by(Invoice.risk_score.desc()).all()
 
 
 @router.post("/flag/{invoice_id}")
